@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!--script src="./sub.js"></script-->
+	<script>
+"use strict";
+	/**
+	 * @todo: look at extension, and create proper element
+	 * 
+	 * 
+	 * 
+	 * @constructor
+	 * @public
+	 * @summary This constructor function creates a global function _import(..) to
+	 * load external files (.js, .css) on demand.
+	 * @description IIFE to create an _import(url) method. The url can be absolute or 
+	 * relative. Relative paths are resolved relative to the file that calls _import(..),
+	 * NOT relative to the main HTML file.
+	 * Warning: relative paths with "../" will fail if the parent is above the root of the 
+	 * server path.
+	 * By default, the method will post success (Promise.resolve) messages to console.log, 
+	 * and failures (Promise.reject) to console.warn. The handlers can be overridden 
+	 * in the constructor.
+	 * @param {function|false} successFn - override for default handler when files are loaded
+	 * @param {function|false} failFn - override for default handler when files fail to load
+	 * - if null is passed, the default is used.
+	 * - if false is passed, nothing is called on resolve &/or reject
+	 * - successFn :: Array of {string url}, caller: {string url}, isQueued? {boolean} } => null
+	 * - failFn    :: Object {string url}, caller: {string url} } => null
+	 * @example of usage
+	 * 	if (_import) {_import( 'myScript.js') }
+	 * */
+	const _import = (function(successFn,failFn) {
+		const urlsImported = [];
+
+		// Promise.all.then returns Array Promise.all.catch has single object
+		const success = successFn ??
+						((resultArray) => {resultArray.forEach( (m) => 
+							console.log(`${m.isDuplicate?'Queued':'Loaded'} ${m.file}` ))
+						});
+		const fail    = failFn ??
+						((resultObj) => console.warn(`Failed to load ${resultObj.file} imported by ${resultObj.caller}`));
+
+		const importFunction = (...urls ) => {
+			Promise.all( urls.map( _promiseImportOneFile )) 
+			.then((resultMessage) => {
+				if (success) {
+					success(resultMessage );
+				}
+			})
+			.catch( (resultMessage) => {
+				if (fail) {
+					fail(resultMessage );
+				}
+				return true; // Prevents the default browser error handling
+			} ); //importFunction
+		}
+
+	  /**
+	   * @private
+	   * @summary Loads target JS file into <head> of HTML file & executes it.
+	   * @param urlOfTarget {string} - Relative or absolute URL of JS file to load
+	   * @returns {Promise} - resolve=loadState complete or loaded, reject otherwise
+	   * - the Object passed to resolve or reject: 
+	   *     {file: {string url}, caller: {string url}, isQueued? {boolean} }
+	   * @description
+	   * - converts @urlOfTarget to absolute path FROM THE FILE containing the _import(..)
+	   * - checks if the same file is already in the queue. If so, triggers resolve() with isQueued:true
+	   * - performs async load of target file to the end of the <head> element 
+	   * */
+	  const _promiseImportOneFile = (urlOfTargetText) => new Promise((resolve, reject) => {
+			// Gotcha: if called from an eventListener, currentScript is null. 
+	  		// If calling script is inline in the html doc, will be <script> with .src =""
+
+		const  urlOfCallingScript = 
+				(!document.currentScript || document.currentScript.src === "" )
+					? window.location.href
+					: document.currentScript.src;
+
+		// is it an absolute path?
+		const urlOfTarget =  
+				( urlOfTargetText.match(/^[A-z]+:\/\//) ) // is protocal substring at start?
+					? new URL(urlOfTargetText)
+					: new URL(urlOfTargetText, urlOfCallingScript );
+		// get text parts of URL
+	  	const absoluteHrefOfTarget 	= urlOfTarget.href;
+	  	const pathnameTail = urlOfTarget.pathname.match( /(?<=[.])[A-z]+$/)[0].toLowerCase();
+
+	  	// prevent re-loading something in the queue already
+		if (urlsImported.includes(absoluteHrefOfTarget)) {
+			resolve({file: absoluteHrefOfTarget, caller: urlOfCallingScript, isDuplicate:true });
+			return; 
+		}
+		// if not already loading, add this URL to the list of loading.
+	  	urlsImported.push( absoluteHrefOfTarget );
+
+		const domHeadElement 	= _makeDomContainer(pathnameTail, absoluteHrefOfTarget );
+		domHeadElement.onerror = () => { 
+			reject({file: absoluteHrefOfTarget, caller: urlOfCallingScript});
+		} 
+
+		// set listener, to notify completion
+		domHeadElement.onload = domHeadElement.onreadystatechange = function() {
+			const loadState = this.readyState;
+			// ignore notifications unless for a final state
+			if (loadState && loadState !== 'loaded' && loadState !== 'complete') {
+				return;
+			}
+			domHeadElement.onload = domHeadElement.onreadystatechange = null; // clear the onload handlers
+			resolve({file: absoluteHrefOfTarget, caller: urlOfCallingScript});
+		}
+		document.head.appendChild(domHeadElement); // this will send a warning to console if file not found.
+/**/
+		});//_promiseImportOneFile
+
+		const _makeDomContainer = (filetype, url) => {
+			let result;
+			switch (filetype) {
+				case "js" :
+					result 	= document.createElement('script'); 
+					// .type    = 'text/javascript'; is not needed
+					result.async 	= true;  // just an attribute with no value
+					result.src 		= url;
+					break;
+				case "css" :
+					result 	= document.createElement("link");
+					result.rel = "stylesheet";
+					result.type = "text/css";
+					result.href = url;
+					break;
+				default : 
+					result 	= document.createElement(null);
+					result.href = url;
+			}
+			return result;
+		}//_makeDomContainer(..)
+
+	  return importFunction;
+	})(  null // null = use default. false = no handler
+		,null //((resultObj) => {console.error(`FAILED ${resultObj.file} in ${resultObj.caller}`)})
+	);
+
+
+	</script> 
+
+	<script>
+		const demo = () => {
+			console.log( `Executing main inline script. "${window.location.href}"` ); 
+
+			console.log('_import https://code.jquery.com' )
+			_import( 'https://code.jquery.com/jquery-4.0.0.min.js' ); // already loaded by sub0.js,
+
+			console.log('_import css/site.css' )
+			_import( 'css/site.css' );
+
+			console.log('_import sub1, sub4' )
+			_import('../oneLevelDeep/subs/sub1.js', 'subs/sub4.js' ); // sub1.js sub2.js again
+			console.log('_import sub0, sub0' )
+			_import('../oneLevelDeep/sub0.js', 'sub0.js' );  // same file twice. sub0.js loads sub2.js again
+			console.log('_import sub_no_such')
+			_import( './sub_no_such.js' ); 
+			//console.log('_import sub3' ) // absolute path, depends on where files are installed
+			//_import('file:///C:/Users/me/programming/!!_tests/oneLevelDeep/subs/sub3.js');
+			console.log('_import sub2')
+			_import( 'subs/sub2.js' ); // already loaded by sub0.js, 		
+		}
+
+		document.addEventListener("DOMContentLoaded", demo );
+	</script>
+</head>
+<body>
+	<h2>Demonstration of _import(..) function.</h2>
+	<p>This page demonstrates an alternative to the ES6 <code>import</code> function.</p>
+	<ul>
+		<li>The initialising function should be run early</li>
+		<li>A call to <code>_import(path)</code> can be made from any <code>&lt;script&gt;</code> block</li>
+		<li>The <code>path</code> parameter can be absolute, or relative to the file it occurs in (not relative to the master HTML file)</li>
+		<li>Multiple attempts to load the same file are resolved, so that only 1 copy is loaded.</li>
+		<li>Loaded scripts are inserted in the <code>&lt;head&gt;</code> block of the main HTML file</li>
+		<li>Unlike the ES6 <code>import(path)</code>, target files can be fetched by the <code>file://</code> protocol</li>
+	</ul>
+	<h2>Trace is in browser console</h2>
+	<p>Open the console in the developer tools menu to see the trace output.</p>
+	<p>There are 3 types of messages in the console. </p>
+	<ul>
+		<li>"_import(..) at the point the _import function is called.</li>
+		<li>"Loaded/Failed to load/Queued" messages generated by _import(..) and channeled to handlers.</li>
+		<li>"Executing" messages embedded in the sub files showing when the script is run.</li>
+	</ul>
+
+</body>
+</html>
