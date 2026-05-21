@@ -36,21 +36,23 @@ Operations — calling the importer function
 
 ### Examples
 
-`// early in execution, maybe in a script block in the head of the main HTML file 
-const _import = (function(globalResultFn=null) { .../* the rest of the code here */ })(); 
-...  
-// somewhere, maybe in a .js file 
-if (_import) { 
-   _import( "/helpers/debug.css", "./lib/mocks.js" ); 
-} 
-... 
-if (_import) { 
-    _import( {
-         url  : '../global/rendering.js'      
-       , attributes : {id:"q17","data-source":"global"} 
-       , handler  : (result) => {if (result.status==="fulfilled") {runDependantScript();}}     
-    } ); 
-};`
+```
+// early in execution, maybe in a script block in the head of the main HTML file  
+const _import = (function(globalResultFn=null) { .../* the rest of the code here */ })();   
+...   
+// somewhere, maybe in a .js file  
+if (_import) {  
+   _import( "/helpers/debug.css", "./lib/mocks.js" );  
+}  
+...   
+if (_import) {   
+    _import( {  
+         url  : '../global/rendering.js'       
+       , attributes : {id:"q17","data-source":"global"}   
+       , handler  : (result) => {if (result.status==="fulfilled") {runDependantScript();}}       
+    } );   
+};
+```  
 			
 
 Operations — results from a call to the importer function
@@ -65,15 +67,18 @@ Operations — results from a call to the importer function
 
 ### Example — object received by optional handler in extended parameter
 
-`{  
+```
+{  
   "file": "http://127.0.0.1:8086/subs/template.html.txt"
 , "caller": "http://127.0.0.1:8086/index.htm"
 , "status": "rejected" 
-}`
+}
+```
 
 ### Example — array received by optional global handler
 
-`[     
+```
+[     
 {      
     "status": "fulfilled"
     , "value": { 
@@ -90,7 +95,8 @@ Operations — results from a call to the importer function
         , "status": "rejected"      
         }     
 } 
-]`
+]
+```
 
 Things to note
 --------------
